@@ -7,6 +7,10 @@ from routes.ia_routes import router as ia_router, moteur, recharger_moteur, dema
 from routes.cni_routes import router as cni_router
 from routes.prix_routes import router as prix_router
 
+
+import nltk
+nltk.download('punkt')
+nltk.download('stopwords')
 logging.basicConfig(level=logging.INFO)
 
 
