@@ -7,10 +7,9 @@ from routes.ia_routes import router as ia_router, moteur, recharger_moteur, dema
 from routes.cni_routes import router as cni_router
 from routes.prix_routes import router as prix_router
 
+from utils.nltk_setup import setup_nltk
+setup_nltk()
 
-import nltk
-nltk.download('punkt')
-nltk.download('stopwords')
 logging.basicConfig(level=logging.INFO)
 
 
@@ -19,7 +18,11 @@ async def lifespan(app: FastAPI):
     print("Démarrage SIMMo IA...")
 
     await recharger_moteur()
-    print(f"Moteur prêt — {len(moteur.prix.annonces)} annonces chargées.")
+
+    try:
+        print(f"Moteur prêt — {len(moteur.prix.annonces)} annonces chargées.")
+    except Exception as e:
+        print("Moteur chargé mais info indisponible:", e)
 
     demarrer_scheduler()
 
@@ -28,8 +31,8 @@ async def lifespan(app: FastAPI):
     from routes.ia_routes import scheduler
     if scheduler.running:
         scheduler.shutdown(wait=False)
-    print("Arrêt SIMMo IA.")
 
+    print("Arrêt SIMMo IA.")
 
 app = FastAPI(
     title       = "SIMMo IA API",
