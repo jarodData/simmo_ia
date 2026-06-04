@@ -9,6 +9,6 @@ sentence-transformers==3.0.0
 python-dotenv==1.0.1
 pydantic==2.7.1
 requests==2.31.0
-scipy==1.13.0 b
+scipy==1.13.0 
 
 
