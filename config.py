@@ -1,5 +1,7 @@
 import os
 from dotenv import load_dotenv
+from pathlib import Path
+
 
 load_dotenv()
 
@@ -16,3 +18,6 @@ class Settings:
     VERSION     : str = "1.0.0"
 
 settings = Settings()
+
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_DIR = BASE_DIR / "modeles" 

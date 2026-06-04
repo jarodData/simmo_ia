@@ -22,12 +22,16 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 moteur = MoteurHybride()
-# model  = joblib.load('C:\www\projet-simmo\simmo_ia\simmo_ia\modeles\modele_prix.pkl')
+#model  = joblib.load('C:\www\projet-simmo\simmo_ia\simmo_ia\modeles\modele_prix.pkl')
+#model = joblib.load(MODEL_DIR / "modele_prix.pkl")
 
-BASE_DIR = Path(__file__).resolve().parent
-MODEL_DIR = BASE_DIR / "modeles"
 
-model = joblib.load(MODEL_DIR / "modele_prix.pkl")
+# router = APIRouter()
+
+@router.get("/test")
+def test():
+    return {"status": "ok"}
+
 
 if not moteur.prix.charger_modele():
     print("modele prix non trouve. Lance POST /api/ia/entrainer une fois")

@@ -7,8 +7,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+import os
 
-MODEL_PATH = r"C:\www\projet-simmo\simmo_ia\simmo_ia\modeles\modele_prix.pkl"
+MODEL_PATH = os.path.join(os.path.dirname(__file__), '..', 'modeles', 'modele_prix.pkl')
 model = joblib.load(MODEL_PATH)
 
 
