@@ -1,0 +1,27 @@
+# render.yaml
+# Fichier de configuration Render (optionnel mais pratique)
+# Placer à la racine du projet
+
+services:
+  - type: web
+    name: simmo-ia
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DB_HOST
+        value: sql213.infinityfree.com
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_NAME
+        value: if0_42025956_simmo_db
+      - key: DB_USER
+        value: if0_42025956
+      - key: DB_PASSWORD
+        sync: false          # ← à remplir manuellement sur Render (secret)
+      - key: IA_API_KEY
+        sync: false          # ← à remplir manuellement sur Render (secret)
+      - key: ANTHROPIC_API_KEY
+        sync: false          # ← à remplir manuellement sur Render (secret)
+      - key: PYTHON_VERSION
+        value: "3.11.11"

@@ -1,0 +1,25 @@
+# .gitignore — à la racine du projet
+
+# Variables d'environnement — NE JAMAIS commiter
+.env
+*.env
+
+# Modèles ML (trop lourds pour GitHub)
+modeles/*.pkl
+modeles/*.joblib
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Fichiers CNI uploadés (données sensibles)
+storage/cni/
+
+# OS
+.DS_Store
+Thumbs.db
