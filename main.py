@@ -41,11 +41,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+
 # routers
 app.include_router(ia_router)
 app.include_router(prix_router)
 app.include_router(cni_router)
 
-@app.get("/")
+# @app.get("/")
+# def root():
+#     return {"message": "SIMMo IA OK"}
+
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
     return {"message": "SIMMo IA OK"}
