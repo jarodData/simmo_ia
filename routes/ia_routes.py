@@ -284,7 +284,15 @@ def statut_moteur(_: None = Depends(verifier_api_key)):
 # /api/ia/health
 # ─────────────────────────────────────────────────────
 
-@router.get("/ia/health")
+# @router.get("/ia/health")
+# def health():
+#     return {
+#         "statut":          "ok",
+#         "version":         settings.VERSION,
+#         "modele_entraine": moteur.prix.est_entraine,
+#     }
+
+@router.api_route("/ia/health", methods=["GET", "HEAD"])
 def health():
     return {
         "statut":          "ok",
@@ -304,27 +312,33 @@ def recherche_contextuelle(
     _       : None    = Depends(verifier_api_key),
 ):
     annonces = fetch_annonces(db)
-    print("PHOTO ANNONCE 0:", annonces[0].get("photo") if annonces else "vide")
 
     lieu_geocode        = None
     lieux_culte         = []
     commodites_trouvees = {}
+    lieux_culte_ref     = []  # tous les lieux de culte depuis le point ref
 
+    # ── Géocodage du lieu de référence ──────────────
     if requete.lieu_reference:
         lieu_geocode = scoreur_contextuel.geocoder_lieu(
             requete.lieu_reference,
             requete.ville_reference or ""
         )
 
+    # OPTIMISATION 1 : UN SEUL appel Overpass pour la religion
+    # depuis le point de référence avec grand rayon (5km)
+    # Puis on filtre localement pour chaque annonce
     if requete.religion and lieu_geocode:
-        lieux_culte = scoreur_contextuel.chercher_lieux_proches(
-            lat       = lieu_geocode["latitude"],
-            lon       = lieu_geocode["longitude"],
-            type_lieu = "place_of_worship",
+        info_ref = scoreur_contextuel.chercher_culte_depuis_reference(
+            lat_ref   = lieu_geocode["latitude"],
+            lon_ref   = lieu_geocode["longitude"],
             religion  = requete.religion,
-            rayon_km  = requete.distance_culte_max or 3,
+            rayon_km  = 5,
         )
+        lieux_culte     = info_ref.get('lieux', [])
+        lieux_culte_ref = lieux_culte  # réutilisé pour chaque annonce
 
+    # Commodités (avec cache)
     if requete.commodites and lieu_geocode:
         for commodite in requete.commodites:
             lieux = scoreur_contextuel.chercher_lieux_proches(
@@ -336,9 +350,7 @@ def recherche_contextuelle(
             if lieux:
                 commodites_trouvees[commodite] = lieux[:3]
 
-    # CORRECTION 2 : passer uniquement les filtres standards à _appliquer_filtres
-    # (évite les KeyError sur lieu_reference, religion, commodites, etc.)
-    # Note : RequeteContextuelle n'a pas de champ "ville", on utilise ville_reference
+    # ── Filtrage ─────────────────────────────────────
     filtres_standards = {k: v for k, v in {
         "ville":            requete.ville_reference,
         "type_bien":        requete.type_bien,
@@ -354,24 +366,18 @@ def recherche_contextuelle(
 
     if not filtrees:
         return {
-            "total":               0,
-            "lieu_geocode":        lieu_geocode,
-            "lieux_culte_trouves": lieux_culte,
-            "annonces":            [],
+            "total": 0, "lieu_geocode": lieu_geocode,
+            "lieux_culte_trouves": lieux_culte, "annonces": [],
         }
 
+    # ── Scores ───────────────────────────────────────
     scores_proximite = (
         scoreur_contextuel.scorer_annonces_par_contexte(
-            filtrees,
-            lieu_geocode["latitude"],
-            lieu_geocode["longitude"],
+            filtrees, lieu_geocode["latitude"], lieu_geocode["longitude"],
         )
-        if lieu_geocode
-        else [0.5] * len(filtrees)
+        if lieu_geocode else [0.5] * len(filtrees)
     )
 
-    # CORRECTION 2 (suite) : forcer 0.5 pour annonces sans coordonnées
-    # même quand lieu_geocode existe, pour ne pas les favoriser
     if lieu_geocode:
         for i, a in enumerate(filtrees):
             if not a.get("latitude") or not a.get("longitude"):
@@ -380,39 +386,23 @@ def recherche_contextuelle(
     texte       = f"{requete.type_bien or ''} {requete.religion or ''}"
     scores_nlp  = moteur.nlp.calculer_similarite(texte, filtrees)
     scores_prix = moteur._score_prix(filtrees, filtres_standards)
-    scores_pop  = moteur._score_popularite(filtrees)
 
-    # CORRECTION 3 (perf) : pré-calculer analyse_quartier et lieux_culte
-    # en dehors de la boucle pour éviter N appels réseau
-    # On ne calcule que pour les annonces qui ont des coordonnées
-    cache_quartier  = {}
-    cache_culte     = {}
-    annonces_avec_coords = [
-        (i, a) for i, a in enumerate(filtrees)
-        if a.get("latitude") and a.get("longitude")
-    ]
+    # OPTIMISATION 2 : analyser_contexte_quartier avec cache
+    # Grouper par coordonnées arrondies pour éviter doublons
+    cache_quartier = {}
+    for a in filtrees:
+        if a.get("latitude") and a.get("longitude"):
+            coord_key = (round(float(a["latitude"]), 3), round(float(a["longitude"]), 3))
+            if coord_key not in cache_quartier:
+                cache_quartier[coord_key] = scoreur_contextuel.analyser_contexte_quartier(
+                    float(a["latitude"]), float(a["longitude"])
+                )
 
-    for i, a in annonces_avec_coords:
-        coord_key = (round(float(a["latitude"]), 4), round(float(a["longitude"]), 4))
-
-        if coord_key not in cache_quartier:
-            cache_quartier[coord_key] = scoreur_contextuel.analyser_contexte_quartier(
-                float(a["latitude"]), float(a["longitude"])
-            )
-
-        if requete.religion and coord_key not in cache_culte:
-            cache_culte[coord_key] = scoreur_contextuel.chercher_lieux_proches(
-                lat       = float(a["latitude"]),
-                lon       = float(a["longitude"]),
-                type_lieu = "place_of_worship",
-                religion  = requete.religion,
-                rayon_km  = 2,
-            )[:3]
+    # OPTIMISATION 3 : prédictions prix en BATCH (1 seul appel ML)
+    predictions = moteur.prix.predire_prix_batch(filtrees) if moteur.prix.est_entraine else [{'prix_estime': None}] * len(filtrees)
 
     resultats = []
     for i, annonce in enumerate(filtrees):
-
-        # CORRECTION 1 : round() avec ndigits=4 (sans ndigits → arrondi à 0 ou 1 !)
         score_final = round(
             float(scores_proximite[i]) * 0.40 +
             float(scores_prix[i])      * 0.30 +
@@ -420,37 +410,29 @@ def recherche_contextuelle(
             4
         )
 
-        distance_ref = None
+        distance_ref     = None
         analyse_quartier = {}
         culte_annonce    = []
 
         if annonce.get("latitude") and annonce.get("longitude"):
-            coord_key = (round(float(annonce["latitude"]), 4), round(float(annonce["longitude"]), 4))
+            lat_a = float(annonce["latitude"])
+            lon_a = float(annonce["longitude"])
+            coord_key = (round(lat_a, 3), round(lon_a, 3))
 
             if lieu_geocode:
                 distance_ref = round(scoreur_contextuel._haversine(
                     lieu_geocode["latitude"], lieu_geocode["longitude"],
-                    float(annonce["latitude"]), float(annonce["longitude"]),
+                    lat_a, lon_a,
                 ), 2)
 
-            # Lire depuis le cache pré-calculé (pas de nouvel appel réseau)
             analyse_quartier = cache_quartier.get(coord_key, {})
-            if requete.religion:
-                culte_annonce = cache_culte.get(coord_key, [])
 
-        # Prix estimé : optionnel, seulement si le modèle est prêt
-        prix_estime = None
-        if moteur.prix.est_entraine:
-            prediction = moteur.prix.predire_prix(
-                ville            = annonce.get("ville", ""),
-                categorie        = annonce.get("categorie", ""),
-                surface_m2       = annonce.get("surface_m2") or 50,
-                nb_chambres      = annonce.get("nb_chambres") or 1,
-                meuble           = annonce.get("meuble") or False,
-                type_transaction = annonce.get("type_transaction", "location"),
-                quartier         = annonce.get("quartier", "Inconnu"),
-            )
-            prix_estime = prediction.get("prix_estime")
+            # OPTIMISATION 4 : filtrage LOCAL des lieux de culte
+            # sans appel réseau supplémentaire
+            if requete.religion and lieux_culte_ref:
+                culte_annonce = scoreur_contextuel.lieux_culte_proches_annonce(
+                    lat_a, lon_a, lieux_culte_ref, rayon_km=2
+                )
 
         resultats.append({
             "id_annonce":          annonce["id"],
@@ -470,7 +452,7 @@ def recherche_contextuelle(
             "lieux_culte_proches": culte_annonce,
             "analyse_quartier":    analyse_quartier,
             "commodites_proches":  commodites_trouvees,
-            "prix_estime":         prix_estime,
+            "prix_estime":         predictions[i].get("prix_estime"),
             "raison":              _generer_raison_contextuelle(
                 score_final, scores_proximite[i], distance_ref,
                 requete, culte_annonce, analyse_quartier,
@@ -487,7 +469,6 @@ def recherche_contextuelle(
         "commodites_trouvees": commodites_trouvees,
         "annonces":            resultats[:limite],
     }
-
 
 # ─────────────────────────────────────────────────────
 # /api/ia/analyser-quartier
