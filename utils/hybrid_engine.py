@@ -10,22 +10,7 @@ class MoteurHybride(MoteurRecommandation):
         super().__init__()  
         self.annonces = []  
 
-    # async def charger_donnees(self):
-    #     """Charge les annonces depuis ton fichier JSON/DB"""
-    #     chemin = self.BASE_DIR / 'data'/ 'annonces.json'
-    #     if not chemin.exists():
-    #         print(f"fichier non trouve : {chemin}")
-    #         self.annonces = []
-    #         return []
-    #     with open(chemin, 'r', encoding='utf-8') as f:
-    #         self.annonces = json.load(f)
-        
-    #     # Passe les annonces au modèle de prix aussi
-    #     if hasattr(self, 'prix'):
-    #         self.prix.annonces = self.annonces
-        
-    #     print(f"{len(self.annonces)} annonces chargées en mémoire")
-    #     return self.annonces
+    
 
     def recommander(self, annonces, requete):
         annonces = appliquer_meilleure_photo(annonces)

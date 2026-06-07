@@ -34,7 +34,7 @@ class Settings:
     # ── Base de données MySQL ──────────────────────────
     DB_HOST     : str = os.getenv("DB_HOST",     "127.0.0.1")
     DB_PORT     : str = os.getenv("DB_PORT",     "3306")
-    DB_NAME     : str = os.getenv("DB_NAME",     "simmo_db")
+    DB_NAME     : str = os.getenv("DB_NAME",     "immo_db")
     DB_USER     : str = os.getenv("DB_USER",     "root")
     DB_PASSWORD : str = os.getenv("DB_PASSWORD", "")
 

@@ -233,7 +233,11 @@ class RecommandationPrix:
             return 'Moyen+'
         if any(x in q for x in ['new bell','bali','bepanda','logpom','nkoldongo']):
             return 'Moyen'
-        if any(x in q for x in ['ndogbong','odza','biyem','mvog-ada','mendong','ekounou']):
+        if any(x in q for x in ['ndogbong', 'odza', 'biyem', 'mvog-ada', 'nkoldongo', 'mendong',
+             'soa', 'etoug-ebe', 'nsimalen', 'ekoumdoum', 'emana', 'melen',
+             'nkolfou', 'ekounou', 'aze', 'ekoko',
+             'pk14', 'pk12', 'pk10', 'pk8', 'pk6',  
+             'bonaberi', 'ndobo', 'ngodi']):
             return 'Populaire'
         return 'Moyen'
 
@@ -335,12 +339,22 @@ class RecommandationPrix:
                 type_tr = a.get('type_transaction', 'location')
                 mult    = (MULT_VENTE if type_tr == 'vente' else MULT_LOCATION).get(qg, 1.0)
                 prix    = float(prix_predit) * mult
-                resultats.append({
-                    'prix_estime'   : round(prix, 0),
-                    'fourchette_min': round(max(prix * 0.75, 50_000), 0),
-                    'fourchette_max': round(prix * 1.25, 0),
-                    'fiabilite'     : 'haute' if (self.mae / prix < 0.1 if prix else False) else 'moyenne',
-                })
+
+            fourchette_min = round(prix * 0.75, 0)
+            fourchette_max = round(prix * 1.25, 0)
+
+            # Corrections
+            if fourchette_min < 30_000:
+                fourchette_min = 30_000
+            if fourchette_max < fourchette_min:
+                fourchette_max = round(fourchette_min * 1.3, 0)
+
+            resultats.append({
+                'prix_estime'   : round(prix, 0),
+                'fourchette_min': fourchette_min,
+                'fourchette_max': fourchette_max,
+                'fiabilite'     : 'haute' if (self.mae / prix < 0.1 if prix else False) else 'moyenne',
+            })
             return resultats
 
         except Exception as e:
